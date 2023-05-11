@@ -226,6 +226,22 @@ router.get(`${spacePrefix}/reconfigure`, async (req, res) => {
   );
 });
 
+router.get(`${spacePrefix}/govern`, async (req, res) => {
+  const { version = 'V3', address = ZERO_ADDRESS, datetime = new Date(), network = 'mainnet' } = req.query as unknown as FetchReconfigureRequest;
+  const { config, dolt } = res.locals as Locals;
+  const ens = await getENS(address);
+  const { governorAddress } = config.juicebox;
+  const memo = `submitted by ${ens} at ${datetime} from nance`;
+  const treasury = new NanceTreasury(config, dolt, myProvider(config.juicebox.network));
+  return res.send(
+    await treasury.fetchReconfiguration(version as string, memo).then((txn: any) => {
+      return { success: true, data: { transaction: txn } };
+    }).catch((e: any) => {
+      return { success: false, error: e };
+    })
+  );
+});
+
 // ===================================== //
 // ======== admin-ish functions ======== //
 // ===================================== //

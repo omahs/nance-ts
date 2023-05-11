@@ -1,5 +1,5 @@
 import { JsonRpcProvider } from '@ethersproject/providers';
-import { ContractTransaction, ethers, Wallet } from 'ethers';
+import { ContractTransaction, ethers, Wallet, Signer } from 'ethers';
 import {
   getJBFundingCycleStore,
   getJBController3_1 as getJBController,
@@ -9,14 +9,21 @@ import {
   getJB3DayReconfigurationBufferBallot,
   getJB7DayReconfigurationBufferBallot,
   getJBETHPaymentTerminal3_1 as getJBETHPaymentTerminal,
-  getJBFundAccessConstraintsStore
+  getJBFundAccessConstraintsStore,
 } from '@jigglyjams/juice-sdk-v3';
 import { BigNumber } from '@ethersproject/bignumber';
-import { JBSplitStruct, JBGroupedSplitsStruct } from '@jigglyjams/juice-sdk-v3/dist/cjs/types/contracts/JBController';
+import {
+  JBSplitStruct,
+  JBGroupedSplitsStruct,
+  JBProjectMetadataStruct,
+  JBFundingCycleDataStruct,
+  JBFundAccessConstraintsStruct,
+} from '@jigglyjams/juice-sdk-v3/dist/cjs/types/contracts/JBController';
 import { ONE_BILLION } from './juiceboxMath';
 import {
   getJBFundingCycleDataStruct,
   getJBFundingCycleMetadataStruct,
+  getDefaultJBFundingCycleMetadataStruct,
   ReconfigureFundingCyclesOfData,
   DistributePayoutsOfData,
   getJBFundAccessConstraintsStruct,
@@ -284,5 +291,20 @@ export class JuiceboxHandlerV3 {
 
   async sendDistributeFundsOf(d: DistributePayoutsOfData): Promise<ContractTransaction> {
     return getJBETHPaymentTerminal(this.wallet, { network: this.network }).distributePayoutsOf(...d);
+  }
+
+  async launchProject(owner: string, metadataCID: string, splits?: JBGroupedSplitsStruct[]) {
+    const newController = getJBController(this.wallet, { network: this.network });
+    newController.launchProjectFor(
+      owner,
+      { content: metadataCID, domain: 0 } as JBProjectMetadataStruct,
+      { duration: 0, weight: 1, discountRate: 0, ballot: ZERO_ADDRESS } as JBFundingCycleDataStruct,
+      getDefaultJBFundingCycleMetadataStruct(),
+      1, // mustStartAtOrAfter
+      splits || [],
+      [] as JBFundAccessConstraintsStruct[], // fundAccessConstraints
+      ['0x0baCb87Cf7DbDdde2299D92673A938E067a9eb29'], // terminals
+      'launched by nance' // memo
+    );
   }
 }

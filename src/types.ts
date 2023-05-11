@@ -148,6 +148,7 @@ export interface NanceConfig {
     network: 'mainnet' | 'goerli';
     projectId: string;
     gnosisSafeAddress: string;
+    governorAddress: string;
   };
   discord: {
     API_KEY: string;

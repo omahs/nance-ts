@@ -9,6 +9,13 @@ const multiSendContractAddress = '0x40A2aCCbd92BCA938b02010E17A5b8929b49130D';
 
 type Token = { address: string; abi: any };
 
+export type GovernorProposal = {
+  targets: string[];
+  values: string[];
+  calldatas: string[];
+  description: string;
+};
+
 export function encodeERC20Transfer(to: string, value: string, token: string): BasicTransaction {
   if (!supportedTokens.includes(token)) throw Error('Unsupported token');
   const loadedToken = JSON.parse(fs.readFileSync(`${__dirname}/tokens/${token}.json`, 'utf-8')) as unknown as Token;
@@ -27,6 +34,8 @@ export function ticketBoothTransfer(holder: string, projectId: string, amount: s
     bytes: iface.encodeFunctionData('transfer(address, uint256, uint256, address)', [holder, Number(projectId), amount, receipient])
   };
 }
+
+// export function encodeGovernorProposal()
 
 export function encodeBatchTransactions(transactions: PartialTransaction[]) {
   return encodeMulti(transactions, multiSendContractAddress);

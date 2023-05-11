@@ -25,6 +25,7 @@
     "@gnosis.pm/safe-ethers-lib": "^1.4.0",
     "@jigglyjams/juice-sdk-v3": "^3.1.3-alpha",
     "@notionhq/client": "^1.0.4",
+    "@openzeppelin/upgrades-core": "^1.26.0",
     "@snapshot-labs/snapshot.js": "^0.3.96",
     "@tryfabric/martian": "^1.2.4",
     "axios": "^0.27.2",

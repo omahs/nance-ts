@@ -7,3 +7,11 @@ CREATE TABLE IF NOT EXISTS config (
   lastUpdated DATETIME,
   PRIMARY KEY(space)
 );
+
+CREATE TABLE IF NOT EXISTS contracts (
+  symbol VARCHAR(255) NOT NULL,
+  contractType VARCHAR(255),
+  contractAddress CHAR(42),
+  contractAbi JSON,
+  PRIMARY KEY(symbol)
+);

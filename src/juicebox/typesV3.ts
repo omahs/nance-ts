@@ -12,6 +12,8 @@ import {
 import { JBSplitStruct } from '../types';
 import { MAX_DISTRIBUTION_LIMIT } from './juiceboxMath';
 
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+
 export declare type JBFundingCycleMetadataStruct = {
   global: JBGlobalFundingCycleMetadataStruct;
   reservedRate: BigNumberish;
@@ -100,6 +102,33 @@ export const getJBFundingCycleMetadataStruct = (
     useDataSourceForPay: data.useDataSourceForPay,
     useDataSourceForRedeem: data.useDataSourceForRedeem,
     dataSource: data.dataSource,
+    metadata: 0
+  };
+};
+
+export const getDefaultJBFundingCycleMetadataStruct = (): JBFundingCycleMetadataStruct => {
+  return {
+    global: {
+      allowSetTerminals: false,
+      allowSetController: false,
+      pauseTransfers: false
+    },
+    reservedRate: 0,
+    redemptionRate: 0,
+    ballotRedemptionRate: 0,
+    pausePay: false,
+    pauseDistributions: false,
+    pauseRedeem: false,
+    pauseBurn: false,
+    allowMinting: false,
+    allowTerminalMigration: false,
+    allowControllerMigration: false,
+    holdFees: false,
+    preferClaimedTokenOverride: false,
+    useTotalOverflowForRedemptions: false,
+    useDataSourceForPay: false,
+    useDataSourceForRedeem: false,
+    dataSource: ZERO_ADDRESS,
     metadata: 0
   };
 };
