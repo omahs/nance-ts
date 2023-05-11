@@ -7,14 +7,20 @@ import { dbOptions } from '../dolt/dbConfig';
 import { dotPin } from '../storage/storageHandler';
 import { checkSignature } from './helpers/signature';
 import { ConfigSpaceRequest } from './models';
-import { mergeTemplateConfig, mergeConfig, fetchTemplateCalendar } from '../utils';
+import { mergeTemplateConfig, mergeConfig, fetchTemplateCalendar, myProvider } from '../utils';
 import logger from '../logging';
+import { JuiceboxHandlerV3 } from '../juicebox/juiceboxHandlerV3';
+import { getProjectDescription, getProjectName, getProjectAvatar } from './helpers/gpt';
 
 const router = express.Router();
 
 router.get('/', (_, res) => {
   res.send('nance-ish control panel');
 });
+
+// ================================ //
+// ========= single config ======== //
+// ================================ //
 
 router.get('/config/:space', async (req, res) => {
   const { space } = req.params;
@@ -26,6 +32,10 @@ router.get('/config/:space', async (req, res) => {
     res.json({ success: false, error: e });
   });
 });
+
+// ================================ //
+// ======== get all spaces ======== //
+// ================================ //
 
 router.get('/all', async (_, res) => {
   const doltSys = new DoltSysHandler();
@@ -50,6 +60,10 @@ router.get('/all', async (_, res) => {
     res.json({ success: false, error: e });
   });
 });
+
+// ================================ //
+// ========= config space ========= //
+// ================================ //
 
 router.post('/config', async (req, res) => {
   const { config, signature, calendar, owners } = req.body as ConfigSpaceRequest;
@@ -85,6 +99,33 @@ router.post('/config', async (req, res) => {
     res.json({ success: true, data: { space, spaceOwners: ownersIn } });
   }).catch((e) => {
     res.json({ success: false, error: e });
+  });
+});
+
+router.get('/generate', async (req, res) => {
+  const { owner } = req.query;
+  const name = (await getProjectName())?.replaceAll('\n', '').replaceAll('.', '');
+  const description = (await getProjectDescription())?.replaceAll('\n', '');
+  const avatar = await getProjectAvatar(description);
+  const avatarCID = await dotPin(avatar, 'base64');
+  const metadata = {
+    name,
+    infoUri: '',
+    logoUri: `ipfs://${avatarCID}`,
+    coverImageUri: '',
+    description,
+    twitter: '',
+    discord: '',
+    telegram: '',
+    tokens: [],
+    tags: ['defi', 'nfts', 'art'],
+    version: 8,
+    payDisclosure: '',
+  };
+  const metadataCID = await dotPin(JSON.stringify(metadata));
+  const juicebox = new JuiceboxHandlerV3('1', myProvider('goerli'), 'goerli');
+  juicebox.launchProject(owner as string || '0x974957529c376F75647615407f3AeFDA12576D0E', metadataCID).then((data) => {
+    res.json({ success: true, data });
   });
 });
 

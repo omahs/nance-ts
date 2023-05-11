@@ -239,3 +239,11 @@ export type PartialTransaction = {
   data: string;
   operation?: number;
 };
+
+export type GovernorProposeTransaction = {
+  targets: string[];
+  values: number[];
+  calldatas: string[];
+  description: string;
+  signatures?: string[];
+};

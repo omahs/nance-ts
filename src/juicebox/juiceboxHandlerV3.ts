@@ -32,6 +32,7 @@ import {
 } from './typesV3';
 import { SQLPayout, SQLReserve } from '../dolt/schema';
 import { keys } from '../keys';
+import { BasicTransaction } from '../types';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 const TOKEN_ETH = '0x000000000000000000000000000000000000EEEe';
@@ -262,7 +263,7 @@ export class JuiceboxHandlerV3 {
     return { address: this.JBController.address, bytes: encodedReconfiguration };
   }
 
-  async encodeDistributeFundsOf() {
+  async encodeDistributeFundsOf(): Promise<BasicTransaction> {
     const currentConfiguration = (await this.currentConfiguration()).configuration;
     const distributionLimit = await this.JBFundAccessConstraintsStore.distributionLimitOf(
       this.projectId,
@@ -295,7 +296,7 @@ export class JuiceboxHandlerV3 {
 
   async launchProject(owner: string, metadataCID: string, splits?: JBGroupedSplitsStruct[]) {
     const newController = getJBController(this.wallet, { network: this.network });
-    newController.launchProjectFor(
+    return newController.launchProjectFor(
       owner,
       { content: metadataCID, domain: 0 } as JBProjectMetadataStruct,
       { duration: 0, weight: 1, discountRate: 0, ballot: ZERO_ADDRESS } as JBFundingCycleDataStruct,
@@ -303,7 +304,7 @@ export class JuiceboxHandlerV3 {
       1, // mustStartAtOrAfter
       splits || [],
       [] as JBFundAccessConstraintsStruct[], // fundAccessConstraints
-      ['0x0baCb87Cf7DbDdde2299D92673A938E067a9eb29'], // terminals
+      ['0x0baCb87Cf7DbDdde2299D92673A938E067a9eb29'], // terminals (set to goerli)
       'launched by nance' // memo
     );
   }

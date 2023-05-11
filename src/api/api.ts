@@ -14,7 +14,7 @@ import { DoltHandler } from '../dolt/doltHandler';
 import { DiscordHandler } from '../discord/discordHandler';
 import { dbOptions } from '../dolt/dbConfig';
 import { SQLPayout, SQLTransfer } from '../dolt/schema';
-import { NanceConfig, Proposal } from '../types';
+import { BasicTransaction, NanceConfig, Proposal, GovernorProposeTransaction } from '../types';
 import { diffBody } from './helpers/diff';
 import { isMultisig, isNanceAddress } from './helpers/permissions';
 import { headToUrl } from '../dolt/doltAPI';
@@ -204,42 +204,47 @@ router.delete(`${spacePrefix}/proposal/:hash`, async (req, res) => {
 // ==================================== //
 
 router.get(`${spacePrefix}/reconfigure`, async (req, res) => {
-  const { version = 'V3', address = ZERO_ADDRESS, datetime = new Date(), network = 'mainnet' } = req.query as unknown as FetchReconfigureRequest;
+  const { version = 'V3', address = ZERO_ADDRESS, datetime = new Date() } = req.query as unknown as FetchReconfigureRequest;
   const { config, dolt } = res.locals as Locals;
   const ens = await getENS(address);
-  const { gnosisSafeAddress } = config.juicebox;
+  const { gnosisSafeAddress, governorAddress, network } = config.juicebox;
+  const treasury = new NanceTreasury(config, dolt, myProvider(config.juicebox.network));
   const memo = `submitted by ${ens} at ${datetime} from juicetool & nance`;
-  const currentNonce = await GnosisHandler.getCurrentNonce(gnosisSafeAddress, network).then((nonce: string) => {
-    return nonce;
-  }).catch((e: any) => {
-    return res.json({ success: false, error: e });
-  });
-  if (!currentNonce) { return res.json({ success: false, error: 'safe not found' }); }
-  const nonce = (Number(currentNonce) + 1).toString();
-  const treasury = new NanceTreasury(config, dolt, myProvider(config.juicebox.network));
-  return res.send(
-    await treasury.fetchReconfiguration(version as string, memo).then((txn: any) => {
-      return { success: true, data: { safe: gnosisSafeAddress, transaction: txn, nonce } };
+  // *** governor reconfiguration *** //
+  if (governorAddress && !gnosisSafeAddress) {
+    return res.send(
+      await treasury.fetchReconfiguration(version as string, memo).then((txn: BasicTransaction) => {
+        const governorProposal: GovernorProposeTransaction = {
+          targets: [txn.address],
+          values: [0],
+          signatures: [],
+          calldatas: [txn.bytes],
+          description: memo,
+        };
+        return { success: true, data: { transaction: governorProposal } };
+      }).catch((e: any) => {
+        return { success: false, error: e };
+      })
+    );
+  }
+  // *** gnosis reconfiguration *** //
+  if (gnosisSafeAddress && !governorAddress) {
+    const currentNonce = await GnosisHandler.getCurrentNonce(gnosisSafeAddress, network).then((nonce: string) => {
+      return nonce;
     }).catch((e: any) => {
-      return { success: false, error: e };
-    })
-  );
-});
-
-router.get(`${spacePrefix}/govern`, async (req, res) => {
-  const { version = 'V3', address = ZERO_ADDRESS, datetime = new Date(), network = 'mainnet' } = req.query as unknown as FetchReconfigureRequest;
-  const { config, dolt } = res.locals as Locals;
-  const ens = await getENS(address);
-  const { governorAddress } = config.juicebox;
-  const memo = `submitted by ${ens} at ${datetime} from nance`;
-  const treasury = new NanceTreasury(config, dolt, myProvider(config.juicebox.network));
-  return res.send(
-    await treasury.fetchReconfiguration(version as string, memo).then((txn: any) => {
-      return { success: true, data: { transaction: txn } };
-    }).catch((e: any) => {
-      return { success: false, error: e };
-    })
-  );
+      return res.json({ success: false, error: e });
+    });
+    if (!currentNonce) { return res.json({ success: false, error: 'safe not found' }); }
+    const nonce = (Number(currentNonce) + 1).toString();
+    return res.send(
+      await treasury.fetchReconfiguration(version as string, memo).then((txn: any) => {
+        return { success: true, data: { safe: gnosisSafeAddress, transaction: txn, nonce } };
+      }).catch((e: any) => {
+        return { success: false, error: e };
+      })
+    );
+  }
+  return { success: false, error: 'no multisig or governor found' };
 });
 
 // ===================================== //
