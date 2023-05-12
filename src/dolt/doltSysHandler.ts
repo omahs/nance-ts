@@ -87,4 +87,13 @@ export class DoltSysHandler {
       return res;
     });
   }
+
+  async getABI(symbol: string): Promise<string> {
+    return this.localDolt.queryRows(oneLine`
+      SELECT contractAbi FROM ${contracts}
+      WHERE symbol = ? LIMIT 1
+    `, [symbol]).then((res) => {
+      return res[0].contractAbi;
+    });
+  }
 }

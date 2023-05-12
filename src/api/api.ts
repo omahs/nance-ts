@@ -1,4 +1,5 @@
 import express from 'express';
+import { utils, Contract } from 'ethers';
 import { Nance } from '../nance';
 import { NotionHandler } from '../notion/notionHandler';
 import { NanceTreasury } from '../treasury';
@@ -18,6 +19,7 @@ import { BasicTransaction, NanceConfig, Proposal, GovernorProposeTransaction } f
 import { diffBody } from './helpers/diff';
 import { isMultisig, isNanceAddress } from './helpers/permissions';
 import { headToUrl } from '../dolt/doltAPI';
+import { DoltSysHandler } from '../dolt/doltSysHandler';
 
 const router = express.Router();
 const spacePrefix = '/:space';
@@ -209,19 +211,23 @@ router.get(`${spacePrefix}/reconfigure`, async (req, res) => {
   const ens = await getENS(address);
   const { gnosisSafeAddress, governorAddress, network } = config.juicebox;
   const treasury = new NanceTreasury(config, dolt, myProvider(config.juicebox.network));
+  const doltSys = new DoltSysHandler();
   const memo = `submitted by ${ens} at ${datetime} from juicetool & nance`;
   // *** governor reconfiguration *** //
   if (governorAddress && !gnosisSafeAddress) {
+    const abi = await doltSys.getABI('NANCEGOV');
     return res.send(
       await treasury.fetchReconfiguration(version as string, memo).then((txn: BasicTransaction) => {
         const governorProposal: GovernorProposeTransaction = {
           targets: [txn.address],
           values: [0],
-          signatures: [],
           calldatas: [txn.bytes],
-          description: memo,
+          description: 'hi',
         };
-        return { success: true, data: { transaction: governorProposal } };
+        const contract = new Contract(governorAddress, abi);
+        const encodedData = contract.interface.encodeFunctionData('propose', [governorProposal.targets, governorProposal.values, governorProposal.calldatas, governorProposal.description]);
+
+        return { success: true, data: { governor: governorAddress, transaction: encodedData } };
       }).catch((e: any) => {
         return { success: false, error: e };
       })
