@@ -24,6 +24,20 @@ export const STATUS = {
   }
 };
 
+export const AUTO = {
+  dailyAlert: 'dailyAlert',
+  temperatureCheckStartAlert: 'temperatureCheckStartAlert',
+  deleteTemperatureCheckStartAlert: 'deleteTemperatureCheckStartAlert',
+  temperatureCheckRollup: 'temperatureCheckRollup',
+  voteRollup: 'voteRollup',
+  voteQuorumAlert: 'voteQuorumAlert',
+  voteEndAlert: 'voteEndAlert',
+  deleteVoteEndAlert: 'deleteVoteEndAlert',
+  voteClose: 'voteClose',
+  incrementGovernanceCycle: 'incrementGovernanceCycle',
+  sendBookkeeping: 'sendBookkeeping',
+};
+
 export const ONE_HOUR_SECONDS = 3600;
 export const FIVE_MINUTES_SECONDS = 300;
 export const ONE_DAY_MILLISECONDS = 24 * 60 * 60 * 1000;

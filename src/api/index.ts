@@ -2,6 +2,7 @@ import cors from 'cors';
 import express from 'express';
 import api from './api';
 import ish from './nanceish';
+import arena from './arena';
 
 const app = express();
 app.use(express.json({ limit: '20mb' }));
@@ -14,6 +15,8 @@ app.set('json spaces', 2);
 app.use('/ish', ish);
 
 app.use('/', api);
+
+app.use('/a/arena', arena);
 
 app.get('/', (req, res) => {
   return res.send(`nance-api commit: ${process.env.RAILWAY_GIT_COMMIT_SHA?.substring(0, 7) ?? 'LOCAL'}`);

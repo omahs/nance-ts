@@ -39,4 +39,6 @@ export const DOLT_CERT = process.env.DOLT_CERT!;
 
 export const { NANCE_AUTO_KEY } = process.env;
 
+export const { REDIS_HOST, REDIS_PORT, REDIS_PASSWORD } = process.env;
+
 logger.info(`DOLT_HOST: ${process.env.DOLT_HOST!}`);
