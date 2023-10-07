@@ -1,14 +1,12 @@
-import { discordLogin } from '../../helpers/discord';
-import { SpaceInfo } from '../../models';
-import { EVENTS } from '../../../constants';
-import { DoltSysHandler } from '../../../dolt/doltSysHandler';
-import { DoltHandler } from '../../../dolt/doltHandler';
-import { pools } from '../../../dolt/pools';
-import { getLastSlash } from '../../../utils';
-import logger from '../../../logging';
-import { NanceConfig } from '../../../types';
-
-const doltSys = new DoltSysHandler(pools.nance_sys);
+import { discordLogin } from '../api/helpers/discord';
+import { SpaceInfo } from '../api/models';
+import { EVENTS } from '../constants';
+import { DoltHandler } from '../dolt/doltHandler';
+import { doltSys } from './doltSys';
+import { pools } from '../dolt/pools';
+import { getLastSlash } from '../utils';
+import logger from '../logging';
+import { NanceConfig } from '../types';
 
 const pollPassCheck = (space: SpaceInfo, yesCount: number, noCount: number) => {
   const ratio = yesCount / (yesCount + noCount);
@@ -57,17 +55,17 @@ export const sendTemperatureCheckRollup = async (config: NanceConfig, date: Date
   return true;
 };
 
-export const sendTemperatureCheckEndAlert = async (space: SpaceInfo) => {
-  const dialogHandler = await discordLogin(space.config);
-  const temperatureCheckEndReminder = await dialogHandler.sendReminder(
+export const sendTemperatureCheckEndAlert = async (config: NanceConfig, date: Date) => {
+  const dialogHandler = await discordLogin(config);
+  const temperatureCheckEndAlert = await dialogHandler.sendReminder(
     EVENTS.TEMPERATURE_CHECK,
-    space.currentEvent.end,
+    date,
     'end'
   );
   await doltSys.updateDialogHandlerMessageId(
-    space.name,
+    config.name,
     'temperatureCheckEndAlert',
-    temperatureCheckEndReminder
+    temperatureCheckEndAlert
   );
   dialogHandler.logout();
   return true;

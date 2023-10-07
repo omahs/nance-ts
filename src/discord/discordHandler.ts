@@ -152,17 +152,15 @@ export class DiscordHandler {
     messageObj.edit({ embeds: [message], flags: [SILENT_FLAG] });
   }
 
-  async sendReminder(event: string, date: Date, type: string, url = '', deleteTimeOut = 60 * 65) {
+  async sendReminder(event: string, date: Date, type: string) {
     const message = (type === 'start')
       ? discordTemplates.reminderStartMessage(
         event,
         date,
-        url
       )
       : discordTemplates.reminderEndMessage(
         event,
         date,
-        url
       );
     return this.getAlertChannel().send({ content: this.roleTag, embeds: [message] }).then((messageObj) => {
       return messageObj.id;
@@ -187,19 +185,26 @@ export class DiscordHandler {
       ({ message, attachments } = discordTemplates.dailyBasicReminder(day, governanceCycle, type, endSeconds, link));
     } else if (reminderType === 'juicebox') {
       ({ message, attachments } = discordTemplates.dailyJuiceboxBasedReminder(governanceCycle, day, endSeconds, link));
+    } else { // default to basic
+      ({ message, attachments } = discordTemplates.dailyBasicReminder(day, governanceCycle, type, endSeconds, link));
     }
-    const channelsSent = this.getDailyUpdateChannels().map((channel) => {
-      if (channel) {
-        // delete old messages
-        channel.messages.fetch({ limit: 20 }).then((messages) => {
-          messages.filter((m) => { return m.author === this.discord.user && m.embeds[0].title === 'Governance Status'; }).map((me) => {
-            return me.delete();
-          });
-        });
+    const channelsSent = await Promise.all(this.getDailyUpdateChannels().map(async (channel) => {
+      if (!channel) return undefined as unknown as TextChannel;
+      // delete old messages
+      const messages = await channel.messages.fetch({ limit: 20 });
+      const deletePromises = messages.filter((m) => {
+        return m.author === this.discord.user && m.embeds[0].title === 'Governance Status';
+      }).map((me) => { return me.delete(); });
+      await Promise.all(deletePromises);
+      try {
         channel.send({ embeds: [message], files: attachments, flags: [SILENT_FLAG] });
+        return channel;
+      } catch (e) {
+        logger.error(`Could not send daily update to ${channel.name} for ${this.config.name}`);
+        logger.error(e);
+        return undefined as unknown as TextChannel;
       }
-      return channel;
-    });
+    }));
     if (channelsSent.includes(undefined as unknown as TextChannel)) {
       return Promise.reject(Error(`Could not send daily update to ${this.config.name}`));
     }

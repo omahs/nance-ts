@@ -14,6 +14,7 @@ import { DoltHandler } from './dolt/doltHandler';
 import { DoltSQL } from './dolt/doltSQL';
 import { GovernanceCycle } from './dolt/schema';
 import { dbOptions } from './dolt/dbConfig';
+import { STATUS } from './constants';
 
 export class Nance {
   dialogHandler;
@@ -69,7 +70,7 @@ export class Nance {
 
   async reminder(event: string, date: Date, type: string, url = '') {
     logger.info(`${this.config.name}: reminder() begin...`);
-    this.dialogHandler.sendReminder(event, date, type, url).then(() => {
+    this.dialogHandler.sendReminder(event, date, type).then(() => {
       logger.info(`${this.config.name}: reminder() complete`);
     }).catch((e) => {
       logger.error(`${this.config.name}: reminder() error!`);
@@ -162,7 +163,7 @@ export class Nance {
     });
   }
 
-  async votingClose(): Promise<Proposal[] | void> {
+  async votingClose(sendVoteRollup = true): Promise<Proposal[] | void> {
     logger.info(`${this.config.name}: votingClose() begin...`);
     const voteProposals = await this.dProposalHandler.getVoteProposals(true);
     const voteProposalIdStrings = voteProposals.map((proposal) => {
@@ -179,16 +180,18 @@ export class Nance {
         proposalMatch.internalVoteResults = vote;
         proposalMatch.internalVoteResults.percentages = this.getVotePercentages(vote);
         if (this.votePassCheck(proposalMatch.internalVoteResults)) {
+          proposalMatch.status = STATUS.APPROVED;
           proposalMatch.internalVoteResults.outcomePercentage = floatToPercentage(proposalMatch.internalVoteResults.percentages[this.config.snapshot.choices[0]]);
           proposalMatch.internalVoteResults.outcomeEmoji = this.config.discord.poll.votePassEmoji;
         } else {
+          proposalMatch.status = STATUS.CANCELLED;
           proposalMatch.internalVoteResults.outcomePercentage = floatToPercentage(proposalMatch.internalVoteResults.percentages[this.config.snapshot.choices[1]]);
           proposalMatch.internalVoteResults.outcomeEmoji = this.config.discord.poll.voteCancelledEmoji;
         }
         try { await this.dProposalHandler.updateVotingClose(proposalMatch); } catch (e) { logger.error(`dDB: ${e}`); }
       } else { logger.info(`${this.config.name}: votingClose() results not final yet!`); }
     })).then(() => {
-      this.dialogHandler.sendVoteResultsRollup(voteProposals);
+      if (sendVoteRollup) this.dialogHandler.sendVoteResultsRollup(voteProposals);
       logger.info(`${this.config.name}: votingClose() complete`);
       logger.info('===================================================================');
       return voteProposals;

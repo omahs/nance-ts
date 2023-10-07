@@ -1,16 +1,18 @@
 import { AUTO, EVENTS, ONE_HOUR_SECONDS } from '../constants';
 import { DateEvent } from '../types';
 import { addSecondsToDate, dateAtTime } from '../utils';
-import { queue } from './queue';
+import { QueueJobData, connectQueue } from './queue';
 
-const formatJobTitle = (space: string, title: string, date: Date) => {
-  return `${space}:${title}:${date.toISOString()}`;
+const queue = connectQueue({ isWorker: false });
+
+const formatJobtype = (space: string, type: string, date: Date) => {
+  return `${space}:${type}:${date.toISOString()}`;
 };
 
-const formatJob = (space: string, title: string, runDate: Date, dataDate?: Date) => {
-  const name = formatJobTitle(space, title, runDate);
-  return queue.createJob({ space, title, date: dataDate })
-    .delayUntil(runDate)
+const formatJob = ({ space, type, delayUntil, dataDate } : QueueJobData) => {
+  const name = formatJobtype(space, type, delayUntil);
+  return queue.createJob({ space, type, date: dataDate })
+    .delayUntil(delayUntil)
     .setId(name)
     .retries(3)
     .backoff('exponential', 1000);
@@ -18,35 +20,59 @@ const formatJob = (space: string, title: string, runDate: Date, dataDate?: Date)
 
 export const addEvents = async (space: string, events: DateEvent[], cycleTriggerTime: string) => {
   const now = new Date();
-  const tommorrow = new Date(now.setUTCDate(now.getUTCDate() + 1));
-  const dailyAlertTime = dateAtTime(tommorrow, cycleTriggerTime);
-  const jobs = [formatJob(space, AUTO.dailyAlert, dailyAlertTime)];
+  let triggerTime = dateAtTime(now, cycleTriggerTime);
+  console.log('daily trigger time', new Date(triggerTime.getTime()));
+  if (now.getTime() > triggerTime.getTime()) {
+    // set to tomorrow if triggerTime is in the past
+    triggerTime = new Date(now.setUTCDate(now.getUTCDate() + 1));
+  }
+  const dailyAlertTime = dateAtTime(triggerTime, cycleTriggerTime);
+  const jobs = [formatJob({ space, type: AUTO.dailyAlert, delayUntil: dailyAlertTime })];
   events.forEach((event) => {
     // =============================================
     // ============= TEMPERATURE CHECK =============
     // =============================================
     if (event.title === EVENTS.TEMPERATURE_CHECK) {
       jobs.push(
+        // Increment currentGovernanceCycle
+        formatJob({
+          space,
+          type: AUTO.incrementGovernanceCycle,
+          delayUntil: addSecondsToDate(event.start, -5) // increment 5 seconds before Temperature Check start
+        }),
         // Temperature Check start alert
-        formatJob(
+        formatJob({
           space,
-          AUTO.temperatureCheckStartAlert,
-          addSecondsToDate(event.start, -ONE_HOUR_SECONDS),
-          event.start
-        ),
+          type: AUTO.temperatureCheckStartAlert,
+          delayUntil: addSecondsToDate(event.start, -ONE_HOUR_SECONDS),
+          dataDate: event.start
+        }),
         // Temperature Check rollup
-        formatJob(
+        formatJob({
           space,
-          AUTO.temperatureCheckRollup,
-          event.start,
-          event.start
-        ),
+          type: AUTO.temperatureCheckRollup,
+          delayUntil: event.start,
+          dataDate: event.end
+        }),
         // Delete Temperature Check start alert
-        formatJob(
+        formatJob({
           space,
-          AUTO.deleteTemperatureCheckStartAlert,
-          event.start
-        )
+          type: AUTO.deleteTemperatureCheckStartAlert,
+          delayUntil: event.start
+        }),
+        // Temperature Check end alert
+        formatJob({
+          space,
+          type: AUTO.temperatureEndAlert,
+          delayUntil: addSecondsToDate(event.end, -ONE_HOUR_SECONDS),
+          dataDate: event.end
+        }),
+        // Delete Temperature Check end alert
+        formatJob({
+          space,
+          type: AUTO.deleteTemperatureEndAlert,
+          delayUntil: event.end
+        }),
       );
     }
     // =============================================
@@ -54,39 +80,51 @@ export const addEvents = async (space: string, events: DateEvent[], cycleTrigger
     // =============================================
     if (event.title === EVENTS.SNAPSHOT_VOTE) {
       jobs.push(
+        // Vote setup
+        formatJob({
+          space,
+          type: AUTO.voteSetup,
+          delayUntil: event.start,
+          dataDate: event.end
+        }),
         // Snapshot vote rollup
-        formatJob(
+        formatJob({
           space,
-          AUTO.voteRollup,
-          event.start,
-          event.start
-        ),
+          type: AUTO.voteRollup,
+          delayUntil: addSecondsToDate(event.start, 60),
+          dataDate: event.end
+        }),
         // Vote quorum alert
-        formatJob(
+        formatJob({
           space,
-          AUTO.voteQuorumAlert,
-          addSecondsToDate(event.start, -2 * ONE_HOUR_SECONDS),
-          event.end
-        ),
+          type: AUTO.voteQuorumAlert,
+          delayUntil: addSecondsToDate(event.end, -2 * ONE_HOUR_SECONDS),
+          dataDate: event.end
+        }),
         // Vote end alert
-        formatJob(
+        formatJob({
           space,
-          AUTO.voteEndAlert,
-          addSecondsToDate(event.start, -ONE_HOUR_SECONDS),
-          event.end
-        ),
+          type: AUTO.voteEndAlert,
+          delayUntil: addSecondsToDate(event.end, -ONE_HOUR_SECONDS),
+          dataDate: event.end
+        }),
         // Delete vote end alert
-        formatJob(
+        formatJob({
           space,
-          AUTO.deleteVoteEndAlert,
-          event.start
-        ),
+          type: AUTO.deleteVoteEndAlert,
+          delayUntil: event.end
+        }),
         // Vote close
-        formatJob(
+        formatJob({
           space,
-          AUTO.voteClose,
-          event.end
-        )
+          type: AUTO.voteClose,
+          delayUntil: event.end
+        }),
+        formatJob({
+          space,
+          type: AUTO.voteResultsRollup,
+          delayUntil: addSecondsToDate(event.end, 60)
+        })
       );
     }
   });

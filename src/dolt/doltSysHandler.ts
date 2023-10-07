@@ -102,14 +102,12 @@ export class DoltSysHandler {
     }).catch((e) => { return Promise.reject(e); });
   }
 
-  async updateCycle(space: string, currentGovernanceCycle: number, time: Date) {
+  async incrementGovernanceCycle(space: string) {
     return this.localDolt.queryResults(oneLine`
-      UPDATE ${system}
-      SET
-        currentGovernanceCycle = ?,
-        cycleDayLastUpdated = ?
-      WHERE space = ?;
-    `, [currentGovernanceCycle, time.toISOString(), space]).then((res) => {
+    UPDATE ${system}
+    SET currentGovernanceCycle = currentGovernanceCycle + 1
+    WHERE space = ?;
+    `, [space]).then((res) => {
       return res.affectedRows;
     }).catch((e) => { return Promise.reject(e); });
   }

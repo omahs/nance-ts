@@ -1,16 +1,16 @@
-import { discordLogin } from '../../helpers/discord';
-import { EVENTS } from '../../../constants';
-import { SnapshotHandler } from '../../../snapshot/snapshotHandler';
-import { DoltHandler } from '../../../dolt/doltHandler';
-import { pools } from '../../../dolt/pools';
-import { keys } from '../../../keys';
-import { dotPin } from '../../../storage/storageHandler';
-import { addSecondsToDate, floatToPercentage } from '../../../utils';
-import { InternalVoteResults, NanceConfig } from '../../../types';
-import { DoltSysHandler } from '../../../dolt/doltSysHandler';
-import logger from '../../../logging';
+import { discordLogin } from '../api/helpers/discord';
+import { EVENTS, STATUS } from '../constants';
+import { SnapshotHandler } from '../snapshot/snapshotHandler';
+import { DoltHandler } from '../dolt/doltHandler';
+import { pools } from '../dolt/pools';
+import { keys } from '../keys';
+import { dotPin } from '../storage/storageHandler';
+import { addSecondsToDate, floatToPercentage } from '../utils';
+import { InternalVoteResults, NanceConfig, Proposal } from '../types';
+import { doltSys } from './doltSys';
+import logger from '../logging';
 
-export const voteSetup = async (config: NanceConfig, date: Date) => {
+export const voteSetup = async (config: NanceConfig, endDate: Date) => {
   const dolt = new DoltHandler(pools[config.name], config.propertyKeys);
   const proposals = await dolt.getVoteProposals();
   if (proposals.length > 0) {
@@ -20,7 +20,7 @@ export const voteSetup = async (config: NanceConfig, date: Date) => {
     // if a space has a period set, a proposal must be submitted with that period
     const end = (snapshotVoteSettings.period)
       ? addSecondsToDate(start, snapshotVoteSettings.period)
-      : date;
+      : endDate;
 
     Promise.all(proposals.map(async (proposal) => {
       const proposalWithHeading = `# ${proposal.proposalId} - ${proposal.title}${proposal.body}`;
@@ -34,8 +34,6 @@ export const voteSetup = async (config: NanceConfig, date: Date) => {
       );
       await dolt.updateVotingSetup({ ...proposal, ipfsURL, voteURL });
     })).then(async () => {
-      const dialogHandler = await discordLogin(config);
-      dialogHandler.sendVoteRollup(proposals, end);
       return true;
     }).catch((e) => {
       logger.error(`${config.name}: votingSetup() error:`);
@@ -47,7 +45,6 @@ export const voteSetup = async (config: NanceConfig, date: Date) => {
 };
 
 export const sendVoteRollup = async (config: NanceConfig, endDate: Date) => {
-  const doltSys = new DoltSysHandler(pools.nance_sys);
   const dialogHandler = await discordLogin(config);
   const dolt = new DoltHandler(pools[config.name], config.propertyKeys);
   const proposals = await dolt.getVoteProposals(true);
@@ -87,7 +84,6 @@ export const sendQuorumRollup = async (config: NanceConfig, endDate: Date) => {
 };
 
 export const sendVoteEndAlert = async (config: NanceConfig, endDate: Date) => {
-  const doltSys = new DoltSysHandler(pools.nance_sys);
   const dialogHandler = await discordLogin(config);
   const votingEndAlert = await dialogHandler.sendReminder(
     EVENTS.SNAPSHOT_VOTE,
@@ -129,10 +125,34 @@ export const voteClose = async (config: NanceConfig) => {
     const findProposal = proposals.find((proposal) => { return proposal.voteURL === vote.voteProposalId; });
     if (!findProposal) { return; }
     const pass = (votePassCheck(config, vote));
+    const outcomeStatus = pass ? STATUS.APPROVED : STATUS.CANCELLED;
+    const updatedProposal = {
+      ...findProposal,
+      status: outcomeStatus,
+      internalVoteResults: {
+        ...vote,
+      },
+    };
+    try { await dolt.updateVotingClose(updatedProposal); } catch (e) { logger.error(`${config.name}: ${e}`); }
+  }));
+};
+
+export const sendVoteResultsRollup = async (config: NanceConfig, governanceCycle: number) => {
+  const dolt = new DoltHandler(pools[config.name], config.propertyKeys);
+  const proposals = await dolt.getVotedProposalsByGovernanceCycle(governanceCycle.toString());
+  if (proposals.length === 0) return false;
+  const proposalSnapshotIdStrings = proposals.map((proposal) => { return `"${proposal.voteURL}"`; });
+  const snapshot = new SnapshotHandler('', config); // dont need private key for this call
+  const voteResults = await snapshot.getProposalVotes(proposalSnapshotIdStrings);
+  let rollupProposals: Proposal[];
+  return Promise.all(voteResults.map(async (vote) => {
+    const findProposal = proposals.find((proposal) => { return proposal.voteURL === vote.voteProposalId; });
+    if (!findProposal) { return; }
+    const pass = (votePassCheck(config, vote));
     const percentages = getVotePercentages(config, vote);
     const outcomeEmoji = pass ? config.discord.poll.voteCancelledEmoji : config.discord.poll.voteCancelledEmoji;
     const outcomePercentage = pass ? floatToPercentage(percentages[config.snapshot.choices[0]]) : floatToPercentage(percentages[config.snapshot.choices[1]]);
-    const outcomeStatus = pass ? config.propertyKeys.statusApproved : config.propertyKeys.statusCancelled;
+    const outcomeStatus = pass ? STATUS.APPROVED : STATUS.CANCELLED;
     const updatedProposal = {
       ...findProposal,
       status: outcomeStatus,
@@ -143,23 +163,22 @@ export const voteClose = async (config: NanceConfig) => {
         outcomePercentage,
       },
     };
-    await dolt.updateVotingClose(updatedProposal);
+    rollupProposals.push(updatedProposal);
   })).then(async () => {
     const dialogHandler = await discordLogin(config);
-    const doltSys = new DoltSysHandler(pools.nance_sys);
-    return dialogHandler.sendVoteResultsRollup(proposals).then((messageId) => {
-      doltSys.updateDialogHandlerMessageId(config.name, 'votingResultsRollup', messageId);
-      return true;
-    }).catch((e) => {
-      return Promise.reject(e);
-    });
+    const votingResultsRollup = await dialogHandler.sendVoteResultsRollup(rollupProposals);
+    await doltSys.updateDialogHandlerMessageId(config.name, 'votingResultsRollup', votingResultsRollup);
+    dialogHandler.logout();
+    return true;
+  }).catch((e) => {
+    logger.error(`${config.name}: ${e}`);
+    return false;
   });
 };
 
 export const deleteVoteEndAlert = async (config: NanceConfig, messageId: string) => {
   const dialogHandler = await discordLogin(config);
   await dialogHandler.deleteMessage(messageId);
-  const doltSys = new DoltSysHandler(pools.nance_sys);
   await doltSys.updateDialogHandlerMessageId(config.name, 'votingEndAlert', '');
   await doltSys.updateDialogHandlerMessageId(config.name, 'votingRollup', '');
   dialogHandler.logout();

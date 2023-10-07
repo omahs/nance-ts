@@ -1,3 +1,4 @@
-import { destroyQueue } from '../queue';
+import { connectQueue } from '../queue';
 
-destroyQueue();
+const queue = connectQueue({ isWorker: false });
+queue.destroy();

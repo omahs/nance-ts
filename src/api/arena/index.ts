@@ -1,9 +1,11 @@
 import Arena from 'bull-arena';
 import { Router } from 'express';
 import Bee from 'bee-queue';
-import { queue } from '../../queue/queue';
+import { connectQueue } from '../../queue/queue';
 
 const router = Router();
+
+const queue = connectQueue({ isWorker: false });
 
 const arena = Arena({
   Bee,
